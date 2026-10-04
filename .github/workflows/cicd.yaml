@@ -1,3 +1,4 @@
+```yaml
 name: Calculator CI-CD
 
 on:
@@ -18,7 +19,7 @@ env:
 jobs:
 
   # ============================================================
-  # CI - TEST
+  # CI - RUN TESTS
   # ============================================================
 
   test:
@@ -46,7 +47,7 @@ jobs:
 
 
   # ============================================================
-  # CI - BUILD & PUSH
+  # CI - BUILD & PUSH DOCKER IMAGE
   # ============================================================
 
   docker:
@@ -97,42 +98,138 @@ jobs:
     name: Deploy to Kubernetes
     needs: docker
 
-    # IMPORTANT:
-    # This runs on your GCP kubemaster self-hosted runner
-    runs-on:
-      - self-hosted
+    # Use your GCP Kubernetes master self-hosted runner
+    runs-on: self-hosted
 
-    # Deploy only when code is pushed to main.
-    # Don't deploy for pull requests.
+    # Deploy only for pushes to main
+    # Pull requests will NOT deploy
     if: github.event_name == 'push'
 
     steps:
 
+      # ----------------------------------------------------------
+      # Checkout Kubernetes manifests
+      # ----------------------------------------------------------
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------------------
+      # Check Kubernetes cluster
+      # ----------------------------------------------------------
+
       - name: Check Kubernetes cluster
         run: |
-          kubectl get nodes
+          echo "Checking Kubernetes cluster..."
+          kubectl get nodes -o wide
 
-      - name: Deploy new image
+
+      # ----------------------------------------------------------
+      # Create namespace
+      # ----------------------------------------------------------
+
+      - name: Create Kubernetes namespace
         run: |
+          echo "Creating namespace if it does not exist..."
+          kubectl apply -f k8s/namespace.yaml
+
+
+      # ----------------------------------------------------------
+      # Create / Update Deployment
+      # ----------------------------------------------------------
+
+      - name: Deploy application
+        run: |
+          echo "Applying Kubernetes Deployment..."
+          kubectl apply -f k8s/deployment.yaml
+
+          echo "Applying Kubernetes Service..."
+          kubectl apply -f k8s/service.yaml
+
+
+      # ----------------------------------------------------------
+      # Update Deployment with immutable image tag
+      # ----------------------------------------------------------
+
+      - name: Update Docker image
+        run: |
+          echo "Deploying image:"
+          echo "$IMAGE_NAME:${{ needs.docker.outputs.image_tag }}"
+
           kubectl -n $NAMESPACE \
             set image deployment/$DEPLOYMENT \
             $CONTAINER_NAME=$IMAGE_NAME:${{ needs.docker.outputs.image_tag }}
 
+
+      # ----------------------------------------------------------
+      # Wait for Kubernetes rollout
+      # ----------------------------------------------------------
+
       - name: Wait for rollout
         run: |
+          echo "Waiting for deployment rollout..."
+
           kubectl -n $NAMESPACE \
             rollout status deployment/$DEPLOYMENT \
             --timeout=180s
 
-      - name: Verify deployment
+
+      # ----------------------------------------------------------
+      # Verify Pods
+      # ----------------------------------------------------------
+
+      - name: Verify Pods
         run: |
-          kubectl -n $NAMESPACE \
-            get pods -o wide
+          echo "Kubernetes Pods:"
+          kubectl get pods \
+            -n $NAMESPACE \
+            -o wide
+
+
+      # ----------------------------------------------------------
+      # Verify Service
+      # ----------------------------------------------------------
+
+      - name: Verify Service
+        run: |
+          echo "Kubernetes Service:"
+          kubectl get svc \
+            -n $NAMESPACE
+
+
+      # ----------------------------------------------------------
+      # Show deployed image
+      # ----------------------------------------------------------
 
       - name: Show deployed image
         run: |
+          echo "Currently deployed image:"
+
           kubectl -n $NAMESPACE \
             get deployment $DEPLOYMENT \
             -o=jsonpath='{.spec.template.spec.containers[0].image}'
 
           echo
+
+
+      # ----------------------------------------------------------
+      # Final verification
+      # ----------------------------------------------------------
+
+      - name: Final deployment verification
+        run: |
+          echo "========================================="
+          echo " Kubernetes Deployment Successful"
+          echo "========================================="
+
+          kubectl get deployment \
+            -n $NAMESPACE
+
+          kubectl get pods \
+            -n $NAMESPACE \
+            -o wide
+
+          kubectl get svc \
+            -n $NAMESPACE
+```
