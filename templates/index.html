@@ -1,47 +1,319 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
     <title>Python Calculator</title>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background:
+                radial-gradient(circle at top left, #ff9a9e 0%, transparent 35%),
+                radial-gradient(circle at bottom right, #a18cd1 0%, transparent 35%),
+                linear-gradient(135deg, #667eea, #764ba2);
+        }
+
+        .calculator {
+            width: 100%;
+            max-width: 430px;
+            background: rgba(255, 255, 255, 0.96);
+            border-radius: 24px;
+            padding: 35px;
+            box-shadow:
+                0 25px 60px rgba(0, 0, 0, 0.25),
+                0 5px 15px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .icon {
+            width: 75px;
+            height: 75px;
+            margin: 0 auto 15px;
+            border-radius: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 38px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        h1 {
+            color: #2d3748;
+            font-size: 30px;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #718096;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #2d3748;
+            font-size: 15px;
+            font-weight: 600;
+        }
+
+        input,
+        select {
+            width: 100%;
+            padding: 14px 15px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f8fafc;
+            color: #2d3748;
+            font-size: 16px;
+            transition: all 0.25s ease;
+            outline: none;
+        }
+
+        input:hover,
+        select:hover {
+            border-color: #a5b4fc;
+        }
+
+        input:focus,
+        select:focus {
+            border-color: #667eea;
+            background: white;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.12);
+        }
+
+        select {
+            cursor: pointer;
+        }
+
+        .calculate-btn {
+            width: 100%;
+            margin-top: 5px;
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            font-size: 17px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .calculate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .calculate-btn:active {
+            transform: translateY(0);
+        }
+
+        .result {
+            margin-top: 25px;
+            padding: 18px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #d1fae5, #ecfdf5);
+            border: 1px solid #86efac;
+            text-align: center;
+        }
+
+        .result-title {
+            color: #166534;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .result-value {
+            color: #15803d;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .error {
+            margin-top: 25px;
+            padding: 18px;
+            border-radius: 14px;
+            background: linear-gradient(135deg, #fee2e2, #fff1f2);
+            border: 1px solid #fca5a5;
+            text-align: center;
+        }
+
+        .error-title {
+            color: #991b1b;
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .error-message {
+            color: #dc2626;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .footer {
+            margin-top: 25px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        @media (max-width: 480px) {
+            .calculator {
+                padding: 25px 20px;
+            }
+
+            h1 {
+                font-size: 26px;
+            }
+
+            .icon {
+                width: 65px;
+                height: 65px;
+                font-size: 32px;
+            }
+        }
+    </style>
 </head>
 
 <body>
 
-    <h1>Python Calculator</h1>
+    <div class="calculator">
 
-    <form method="POST">
+        <div class="header">
+            <div class="icon">🧮</div>
 
-        <label>Number 1:</label>
-        <input type="number" step="any" name="number1" required>
+            <h1>Python Calculator</h1>
 
-        <br><br>
+            <p class="subtitle">
+                Simple, fast and easy calculation
+            </p>
+        </div>
 
-        <label>Number 2:</label>
-        <input type="number" step="any" name="number2" required>
+        <form method="POST">
 
-        <br><br>
+            <div class="form-group">
+                <label for="number1">🔢 Number 1</label>
 
-        <label>Operation:</label>
+                <input
+                    type="number"
+                    step="any"
+                    id="number1"
+                    name="number1"
+                    placeholder="Enter first number"
+                    required
+                >
+            </div>
 
-        <select name="operation">
-            <option value="add">Add</option>
-            <option value="subtract">Subtract</option>
-            <option value="multiply">Multiply</option>
-            <option value="divide">Divide</option>
-        </select>
 
-        <br><br>
+            <div class="form-group">
+                <label for="number2">🔢 Number 2</label>
 
-        <button type="submit">Calculate</button>
+                <input
+                    type="number"
+                    step="any"
+                    id="number2"
+                    name="number2"
+                    placeholder="Enter second number"
+                    required
+                >
+            </div>
 
-    </form>
 
-    {% if result is not none %}
-        <h2>Result: {{ result }}</h2>
-    {% endif %}
+            <div class="form-group">
+                <label for="operation">⚙️ Operation</label>
 
-    {% if error %}
-        <h2>{{ error }}</h2>
-    {% endif %}
+                <select
+                    id="operation"
+                    name="operation"
+                >
+                    <option value="add">➕ Add</option>
+                    <option value="subtract">➖ Subtract</option>
+                    <option value="multiply">✖️ Multiply</option>
+                    <option value="divide">➗ Divide</option>
+                </select>
+            </div>
+
+
+            <button
+                type="submit"
+                class="calculate-btn"
+            >
+                🚀 Calculate
+            </button>
+
+        </form>
+
+
+        {% if result is not none %}
+
+            <div class="result">
+
+                <div class="result-title">
+                    Calculation Result
+                </div>
+
+                <div class="result-value">
+                    {{ result }}
+                </div>
+
+            </div>
+
+        {% endif %}
+
+
+        {% if error %}
+
+            <div class="error">
+
+                <div class="error-title">
+                    ⚠️ Error
+                </div>
+
+                <div class="error-message">
+                    {{ error }}
+                </div>
+
+            </div>
+
+        {% endif %}
+
+
+        <div class="footer">
+            Built with Python &amp; Flask
+        </div>
+
+    </div>
 
 </body>
 </html>
