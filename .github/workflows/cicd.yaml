@@ -1,3 +1,4 @@
+```yaml
 name: Calculator CI-CD
 
 on:
@@ -9,36 +10,62 @@ on:
     branches:
       - main
 
+
+# ============================================================
+# GLOBAL VARIABLES
+# ============================================================
+
 env:
   IMAGE_NAME: utkal1990/python-calculator
-  NAMESPACE: python-calculator
-  DEPLOYMENT: python-calculator
   CONTAINER_NAME: python-calculator
+  APP_PORT: 5000
+
 
 jobs:
 
   # ============================================================
-  # CI - RUN TESTS
+  # CI - RUN PYTHON TESTS
   # ============================================================
 
   test:
     name: Run Python Tests
+
     runs-on: ubuntu-latest
 
     steps:
 
+      # --------------------------------------------------------
+      # Checkout source code
+      # --------------------------------------------------------
+
       - name: Checkout code
         uses: actions/checkout@v4
 
+
+      # --------------------------------------------------------
+      # Setup Python
+      # --------------------------------------------------------
+
       - name: Setup Python
         uses: actions/setup-python@v5
+
         with:
           python-version: "3.12"
+
+
+      # --------------------------------------------------------
+      # Install dependencies
+      # --------------------------------------------------------
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+
+
+      # --------------------------------------------------------
+      # Run unit tests
+      # --------------------------------------------------------
 
       - name: Run tests
         run: |
@@ -51,7 +78,9 @@ jobs:
 
   docker:
     name: Build and Push Docker Image
+
     needs: test
+
     runs-on: ubuntu-latest
 
     outputs:
@@ -59,19 +88,43 @@ jobs:
 
     steps:
 
+      # --------------------------------------------------------
+      # Checkout source code
+      # --------------------------------------------------------
+
       - name: Checkout code
         uses: actions/checkout@v4
 
+
+      # --------------------------------------------------------
+      # Login to Docker Hub
+      # --------------------------------------------------------
+
       - name: Login to Docker Hub
         uses: docker/login-action@v3
+
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
+
+      # --------------------------------------------------------
+      # Generate immutable image tag
+      # --------------------------------------------------------
+
       - name: Generate image tag
         id: meta
+
         run: |
           echo "image_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+          echo "Image tag:"
+          echo "${GITHUB_SHA::7}"
+
+
+      # --------------------------------------------------------
+      # Build Docker image
+      # --------------------------------------------------------
 
       - name: Build Docker image
         run: |
@@ -80,154 +133,244 @@ jobs:
             -t $IMAGE_NAME:latest \
             .
 
+
+      # --------------------------------------------------------
+      # Push immutable SHA image
+      # --------------------------------------------------------
+
       - name: Push SHA image
         run: |
-          docker push $IMAGE_NAME:${GITHUB_SHA::7}
+          docker push \
+            $IMAGE_NAME:${GITHUB_SHA::7}
+
+
+      # --------------------------------------------------------
+      # Push latest image
+      # --------------------------------------------------------
 
       - name: Push latest image
         run: |
-          docker push $IMAGE_NAME:latest
+          docker push \
+            $IMAGE_NAME:latest
 
 
   # ============================================================
-  # CD - DEPLOY TO KUBERNETES
+  # CD - DEPLOY DOCKER CONTAINER TO KUBEMASTER
   # ============================================================
 
   deploy:
-    name: Deploy to Kubernetes
+    name: Deploy Docker Container to Master
+
     needs: docker
 
-    # Use your GCP Kubernetes master self-hosted runner
+    # ----------------------------------------------------------
+    # Self-hosted runner is installed on kubemaster
+    # ----------------------------------------------------------
+
     runs-on: self-hosted
 
+    # ----------------------------------------------------------
     # Deploy only for pushes to main
-    # Pull requests will NOT deploy
+    # ----------------------------------------------------------
+
     if: github.event_name == 'push'
 
     steps:
 
-      # ----------------------------------------------------------
-      # Checkout Kubernetes manifests
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Display deployment information
+      # --------------------------------------------------------
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-
-      # ----------------------------------------------------------
-      # Check Kubernetes cluster
-      # ----------------------------------------------------------
-
-      - name: Check Kubernetes cluster
+      - name: Deployment information
         run: |
-          echo "Checking Kubernetes cluster..."
-          kubectl get nodes -o wide
+          echo "=========================================="
+          echo " Docker Deployment"
+          echo "=========================================="
+
+          echo "Host:"
+          hostname
+
+          echo ""
+
+          echo "Docker version:"
+          docker --version
+
+          echo ""
+
+          echo "Kubernetes master:"
+          hostname -f
 
 
-      # ----------------------------------------------------------
-      # Create namespace
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Verify Docker service
+      # --------------------------------------------------------
 
-      - name: Create Kubernetes namespace
+      - name: Verify Docker
         run: |
-          echo "Creating namespace if it does not exist..."
-          kubectl apply -f k8s/namespace.yaml
+          docker info
 
 
-      # ----------------------------------------------------------
-      # Create / Update Deployment
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Pull new image from Docker Hub
+      # --------------------------------------------------------
 
-      - name: Deploy application
+      - name: Pull Docker image
         run: |
-          echo "Applying Kubernetes Deployment..."
-          kubectl apply -f k8s/deployment.yaml
-
-          echo "Applying Kubernetes Service..."
-          kubectl apply -f k8s/service.yaml
-
-
-      # ----------------------------------------------------------
-      # Update Deployment with immutable image tag
-      # ----------------------------------------------------------
-
-      - name: Update Docker image
-        run: |
-          echo "Deploying image:"
+          echo "Pulling image:"
           echo "$IMAGE_NAME:${{ needs.docker.outputs.image_tag }}"
 
-          kubectl -n $NAMESPACE \
-            set image deployment/$DEPLOYMENT \
-            $CONTAINER_NAME=$IMAGE_NAME:${{ needs.docker.outputs.image_tag }}
+          docker pull \
+            $IMAGE_NAME:${{ needs.docker.outputs.image_tag }}
 
 
-      # ----------------------------------------------------------
-      # Wait for Kubernetes rollout
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Stop existing container
+      # --------------------------------------------------------
 
-      - name: Wait for rollout
+      - name: Stop old container
         run: |
-          echo "Waiting for deployment rollout..."
+          echo "Stopping existing container..."
 
-          kubectl -n $NAMESPACE \
-            rollout status deployment/$DEPLOYMENT \
-            --timeout=180s
+          docker stop $CONTAINER_NAME 2>/dev/null || true
 
 
-      # ----------------------------------------------------------
-      # Verify Pods
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Remove existing container
+      # --------------------------------------------------------
 
-      - name: Verify Pods
+      - name: Remove old container
         run: |
-          echo "Kubernetes Pods:"
-          kubectl get pods \
-            -n $NAMESPACE \
-            -o wide
+          echo "Removing existing container..."
+
+          docker rm $CONTAINER_NAME 2>/dev/null || true
 
 
-      # ----------------------------------------------------------
-      # Verify Service
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Start new container
+      # --------------------------------------------------------
 
-      - name: Verify Service
+      - name: Start new container
         run: |
-          echo "Kubernetes Service:"
-          kubectl get svc \
-            -n $NAMESPACE
+          echo "Starting new container..."
+
+          docker run -d \
+            --name $CONTAINER_NAME \
+            --restart unless-stopped \
+            -p $APP_PORT:$APP_PORT \
+            $IMAGE_NAME:${{ needs.docker.outputs.image_tag }}
 
 
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Wait for application startup
+      # --------------------------------------------------------
+
+      - name: Wait for application
+        run: |
+          echo "Waiting for application..."
+
+          sleep 5
+
+
+      # --------------------------------------------------------
+      # Verify Docker container
+      # --------------------------------------------------------
+
+      - name: Verify container
+        run: |
+          echo "=========================================="
+          echo " Running Containers"
+          echo "=========================================="
+
+          docker ps \
+            --filter "name=$CONTAINER_NAME"
+
+
+      # --------------------------------------------------------
+      # Show container logs
+      # --------------------------------------------------------
+
+      - name: Show container logs
+        run: |
+          echo "=========================================="
+          echo " Application Logs"
+          echo "=========================================="
+
+          docker logs \
+            --tail 50 \
+            $CONTAINER_NAME
+
+
+      # --------------------------------------------------------
+      # Application health check
+      # --------------------------------------------------------
+
+      - name: Application health check
+        run: |
+          echo "Checking application health..."
+
+          curl \
+            --fail \
+            --retry 10 \
+            --retry-delay 2 \
+            --connect-timeout 5 \
+            http://localhost:$APP_PORT/health
+
+          echo ""
+          echo "=========================================="
+          echo " Application is HEALTHY"
+          echo "=========================================="
+
+
+      # --------------------------------------------------------
       # Show deployed image
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
 
       - name: Show deployed image
         run: |
-          echo "Currently deployed image:"
+          echo "=========================================="
+          echo " Deployed Image"
+          echo "=========================================="
 
-          kubectl -n $NAMESPACE \
-            get deployment $DEPLOYMENT \
-            -o=jsonpath='{.spec.template.spec.containers[0].image}'
-
-          echo
+          docker inspect \
+            $CONTAINER_NAME \
+            --format='{{.Config.Image}}'
 
 
-      # ----------------------------------------------------------
-      # Final verification
-      # ----------------------------------------------------------
+      # --------------------------------------------------------
+      # Show port mapping
+      # --------------------------------------------------------
 
-      - name: Final deployment verification
+      - name: Show port mapping
         run: |
-          echo "========================================="
-          echo " Kubernetes Deployment Successful"
-          echo "========================================="
+          echo "=========================================="
+          echo " Port Mapping"
+          echo "=========================================="
 
-          kubectl get deployment \
-            -n $NAMESPACE
+          docker port $CONTAINER_NAME
 
-          kubectl get pods \
-            -n $NAMESPACE \
-            -o wide
 
-          kubectl get svc \
-            -n $NAMESPACE
+      # --------------------------------------------------------
+      # Final verification
+      # --------------------------------------------------------
+
+      - name: Final verification
+        run: |
+          echo ""
+          echo "=========================================="
+          echo " DEPLOYMENT SUCCESSFUL"
+          echo "=========================================="
+
+          echo "Application:"
+          echo "http://$(hostname -I | awk '{print $1}'):$APP_PORT"
+
+          echo ""
+          echo "Container:"
+          docker ps --filter "name=$CONTAINER_NAME"
+
+          echo ""
+          echo "Health:"
+          curl -s http://localhost:$APP_PORT/health
+
+          echo ""
+          echo "=========================================="
+```
