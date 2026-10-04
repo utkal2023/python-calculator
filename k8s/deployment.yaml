@@ -1,0 +1,41 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: python-calculator
+  namespace: python-calculator
+
+spec:
+  replicas: 2
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+
+  selector:
+    matchLabels:
+      app: python-calculator
+
+  template:
+    metadata:
+      labels:
+        app: python-calculator
+
+    spec:
+      containers:
+        - name: python-calculator
+          image: utkal1990/python-calculator:latest
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 5000
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+
+            limits:
+              cpu: 500m
+              memory: 512Mi
