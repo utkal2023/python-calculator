@@ -101,8 +101,6 @@ jobs:
     # This runs on your GCP kubemaster self-hosted runner
     runs-on:
       - self-hosted
-      - kubernetes
-      - gcp
 
     # Deploy only when code is pushed to main.
     # Don't deploy for pull requests.
